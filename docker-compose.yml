@@ -1,0 +1,61 @@
+# Boshpana.ai — full stack.
+# Offline demo:  docker compose up backend queue bot
+# Run the (simulation) parser once:  docker compose run --rm parser
+# Run the (simulation) userbot:      docker compose up userbot
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: sqlite
+      QUEUE_CONNECTION: database
+      SIMULATION_DEFAULT: "true"
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend-db:/app/database
+
+  queue:
+    build: ./backend
+    command: php artisan queue:work --tries=2 --timeout=300
+    environment:
+      DB_CONNECTION: sqlite
+      QUEUE_CONNECTION: database
+      SIMULATION_DEFAULT: "true"
+    volumes:
+      - backend-db:/app/database
+    depends_on:
+      - backend
+
+  bot:
+    build: ./bot
+    environment:
+      BACKEND_URL: http://backend:8000/api/v1
+      BOT_API_TOKEN: local-bot-token
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      DEFAULT_LANG: uz
+    depends_on:
+      - backend
+
+  parser:
+    build: ./parser
+    command: python runner.py --simulation --source all
+    environment:
+      BACKEND_URL: http://backend:8000/api/v1
+      INGEST_API_TOKEN: local-ingest-token
+    depends_on:
+      - backend
+
+  userbot:
+    build: ./userbot
+    command: python main.py --simulation
+    environment:
+      BACKEND_URL: http://backend:8000/api/v1
+      USERBOT_API_TOKEN: local-userbot-token
+    depends_on:
+      - backend
+
+volumes:
+  backend-db:
